@@ -46,11 +46,18 @@ if command -v go &>/dev/null; then
     cd /home/adminuser/sei-fullnode
     git clone https://github.com/sei-protocol/sei-chain.git
     sudo chown -R adminuser:adminuser /home/adminuser/sei-fullnode/sei-chain
-
+    if [ $? -eq 0 ]; then
+       
+        echo "sei-chain Ownership change successful." + $(date) >> /tmp/seiownerif.txt
+    else
+        
+        echo "sei-chain Ownership change failed." + $(date) >> /tmp/seiownerelse.txt
+    fi
     # Checkout a specific version and build the project
     cd sei-chain
+    /usr/bin/git fetch origin
     /usr/bin/git checkout v3.0.9
-    if  git checkout v3.0.9; then
+    if  /usr/bin/git checkout v3.0.9; then
         echo "Git checkout." + $(date) >> /tmp/gitcheckif.txt
     else
         echo "Ownership change failed."
