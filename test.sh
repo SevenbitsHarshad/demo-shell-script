@@ -39,7 +39,7 @@ if command -v go &>/dev/null; then
 
     # Checkout a specific version and build the project
     cd sei-chain
-    git checkout v3.0.9
+    /usr/bin/git checkout v3.0.9
     if  git checkout v3.0.9; then
         echo "Git checkout." + $(date) >> /tmp/gitcheckif.txt
     else
