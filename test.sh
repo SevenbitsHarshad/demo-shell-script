@@ -1,6 +1,7 @@
 #!/bin/bash
 mkdir -p /home/adminuser/sei-fullnode
 sudo chown -R adminuser:adminuser /home/adminuser/sei-fullnode
+sudo chmod -R 775 adminuser:adminuser /home/adminuser
 
 # Install required packages
 sudo apt update
@@ -29,7 +30,7 @@ else
     echo "Ownership change failed." + $(date) >> /tmp/ownerelse.txt
 fi
 if command -v go &>/dev/null; then
-    sudo chmod -R 600 adminuser:adminuser /home/adminuser/go
+    sudo chmod -R 775 adminuser:adminuser /home/adminuser/go
     # Check the exit status of the chown command
     if [ $? -eq 0 ]; then
         echo "Ownership change successful."
