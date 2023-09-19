@@ -20,7 +20,14 @@ source /home/adminuser/.profile
 
 # Check if Go is installed
 sudo chown -R adminuser:adminuser /home/adminuser/go
-sudo chown -R adminuser:adminuser /home/adminuser/go/bin
+# Check the exit status of the chown command
+if [ $? -eq 0 ]; then
+    echo "Ownership change successful."
+    echo "Ownership change successful." + $(date) >> /tmp/ownerif.txt
+else
+    echo "Ownership change failed."
+    echo "Ownership change failed." + $(date) >> /tmp/ownerelse.txt
+fi
 if command -v go &>/dev/null; then
     # Install cosmovisor
     go install github.com/cosmos/cosmos-sdk/cosmovisor/cmd/cosmovisor@v1.0.0
@@ -33,6 +40,12 @@ if command -v go &>/dev/null; then
     # Checkout a specific version and build the project
     cd sei-chain
     git checkout v3.0.9
+    if  git checkout v3.0.9; then
+        echo "Git checkout." + $(date) >> /tmp/gitcheckif.txt
+    else
+        echo "Ownership change failed."
+        echo "Git checkout failed." + $(date) >> /tmp/gitcheckelse.txt
+    fi
     make install
     sleep 10
     source ~/.profile
