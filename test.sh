@@ -29,6 +29,16 @@ else
     echo "Ownership change failed." + $(date) >> /tmp/ownerelse.txt
 fi
 if command -v go &>/dev/null; then
+    sudo chmod -R 600 adminuser:adminuser /home/adminuser/go
+    # Check the exit status of the chown command
+    if [ $? -eq 0 ]; then
+        echo "Ownership change successful."
+        echo "chmod change successful." + $(date) >> /tmp/chmodif.txt
+    else
+        echo "Ownership change failed."
+        echo "chmod change failed." + $(date) >> /tmp/chmodelse.txt
+    fi
+    
     # Install cosmovisor
     go install github.com/cosmos/cosmos-sdk/cosmovisor/cmd/cosmovisor@v1.0.0
 
