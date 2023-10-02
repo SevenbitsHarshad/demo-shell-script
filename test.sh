@@ -139,6 +139,12 @@ else
         then
             # Install cosmovisor
             go install github.com/cosmos/cosmos-sdk/cosmovisor/cmd/cosmovisor@v1.0.0    
+            if [ $? -eq 0 ]; then
+                echo "cosmos install sucess" + $(date) >> /tmp/cosmosinstall.txt
+            else
+                echo "cosmos install fail" + $(date) >> /tmp/cosmosinstall.txt
+            fi
+
             cd /home/sei_data
             git clone https://github.com/sei-protocol/sei-chain.git
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
@@ -150,6 +156,11 @@ else
         fi
     
         make install
+        if [ $? -eq 0 ]; then
+            echo "make install sucess" + $(date) >> /tmp/makeinstall.txt
+        else
+            echo "make install fail" + $(date) >> /tmp/cosmosinstall.txt
+        fi
         sleep 10
         source ~/.profile
         source /home/sxt-admin/.profile
