@@ -19,16 +19,7 @@ if [ $? -eq 0 ]; then
     echo "Azure login with managed identity was successful."
 else
     echo "Azure login with managed identity failed."
-    while true; do
-        az login --identity
-        if [ $? -eq 0 ]; then
-            echo "Azure login with managed identity was successful. from wait"
-            break
-        else
-            echo "Azure login with managed identity failed. wait 120"
-            sleep 120
-        fi
-    done
+   
     # Add error handling or exit the script if needed
 fi
 
