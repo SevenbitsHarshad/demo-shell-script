@@ -150,6 +150,11 @@ else
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
             cd sei-chain
             git checkout v3.0.9
+            if [ $? -eq 0 ]; then
+                echo "git checkout sucess" + $(date) >> /tmp/gitcheckout.txt
+            else
+                echo "git checkout fail" + $(date) >> /tmp/gitcheckout.txt
+            fi
         else
             sudo cp -r /home/sei_data/go /home/sxt-admin
             cd /home/sei_data/sei-chain
@@ -159,7 +164,7 @@ else
         if [ $? -eq 0 ]; then
             echo "make install sucess" + $(date) >> /tmp/makeinstall.txt
         else
-            echo "make install fail" + $(date) >> /tmp/cosmosinstall.txt
+            echo "make install fail" + $(date) >> /tmp/makeinstall.txt
         fi
         sleep 10
         source ~/.profile
