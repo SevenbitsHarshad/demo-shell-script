@@ -132,7 +132,7 @@ else
     echo 'export GO111MODULE=on' >> /home/sxt-admin/.profile
     echo 'export PATH=$PATH:/usr/local/go/bin:/home/sxt-admin/go/bin' >> /home/sxt-admin/.profile
     source /home/sxt-admin/.profile
-    exit
+     
     if command -v go &>/dev/null; then
 
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
