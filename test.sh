@@ -158,8 +158,6 @@ else
             sudo chown -R sxt-admin:sxt-admin /home/sxt-admin/go
             sudo chmod -R 0775 /home/sxt-admin/go
 
-            sudo chown -R sxt-admin:sxt-admin /home/sei_data
-            sudo chmod -R 0775 /home/sei_data
 
             mkdir -p /home/sei_data/sei-chain
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
@@ -209,18 +207,24 @@ else
             echo "seid  version fail" + $(date) >> /tmp/seidversion.txt
         fi
         
-        ln -s $HOME/.sei/cosmovisor/upgrades/3.0.8 $HOME/.sei/cosmovisor/current
-        sudo ln -s $HOME/.sei/cosmovisor/current/bin/seid /usr/local/bin/seid
 
         wget -O /home/sei_data/config/genesis.json https://snapshots.polkachu.com/genesis/sei/genesis.json --inet4-only
         sed -i 's/seeds = ""/seeds = "ade4d8bc8cbe014af6ebdf3cb7b1e9ad36f412c0@seeds.polkachu.com:11956"/' /home/sei_data/config/config.toml
         sed -i -e "s|^bootstrap-peers *=.*|bootstrap-peers = \"33b1526dd09adfe1330ac29d51c89505e6363e8b@3.70.17.165:26656,6e1b407d182f58b0e6e2e519d1fc4d823f006273@35.158.58.99:26656\"|" /home/sei_data/config/config.toml
 
         # Create Cosmovisor Folders
-        sudo chown -R sxt-admin:sxt-admin /home/sei_data/cosmovisor
-        sudo chmod -R 0775 /home/sei_data/cosmovisor
+        
         mkdir -p /home/sei_data/cosmovisor/genesis/bin
         mkdir -p /home/sei_data/cosmovisor/upgrades
+        
+        chown -R sxt-admin:sxt-admin /home/sei_data
+        chmod -R 0775 /home/sei_data
+
+        sudo chown -R sxt-admin:sxt-admin /home/sei_data/cosmovisor
+        sudo chmod -R 0775 /home/sei_data/cosmovisor
+
+        sudo chown -R sxt-admin:sxt-admin /home/sei_data/config
+        sudo chmod -R 0775 /home/sei_data/config
 
         # Load Node Binary into Cosmovisor Folder
         cp /home/sxt-admin/go/bin/seid /home/sei_data/cosmovisor/genesis/bin
