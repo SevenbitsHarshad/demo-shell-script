@@ -51,14 +51,18 @@ echo "data_disk_name: $data_disk_name"
 #check disk attach or not
 has_disks=$(az vmss show --resource-group "$rgName" --name "$vmssName" --instance-id "$instance_id" --query 'storageProfile.dataDisks' --output json)
 echo "has_disks: $has_disks"
+echo "has_disks $$has_disks" + $(date) >> /tmp/has_disks.txt
 if [ "$(echo "$has_disks" | jq '. | length')" -ne 0 ]; then
     echo "The disk $data_disk_name exists in resource group $rgName."
+    echo "has_disks if" + $(date) >> /tmp/has_disksif.txt
 else
+    echo "has_disks else" + $(date) >> /tmp/has_diskselse.txt
     # Check if the disk exists or not
     if az disk show --name "$data_disk_name" --resource-group "$rgName" &> /dev/null; then
         echo "The disk $data_disk_name exists in resource group $rgName."
+        echo "has_disks else if" + $(date) >> /tmp/has_diskselseif.txt
     else
-
+        echo "has_disks else else" + $(date) >> /tmp/has_diskselseelse.txt
         # Check if snapshot ID are null"
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
         then
@@ -70,6 +74,7 @@ else
                     echo "Data disk create succeeded from snapshot id."
                     break
                 else
+                    echo "Waiting for data disk create to complete.." + $(date) >> /tmp/datadiskcreate.txt
                     echo "Waiting for data disk create to complete..."
                     sleep 10
                 fi
@@ -211,26 +216,6 @@ else
 
         # Load Node Binary into Cosmovisor Folder
         cp $HOME/go/bin/seid /home/sei_data/cosmovisor/genesis/bin
-sudo tee /etc/systemd/system/seid.service > /dev/null <<EOF
-[Unit]
-Description=Sei Node Service
-After=network-online.target
-[Service]
-User=sxt-admin
-ExecStart=/home/sxt-admin/go/bin/cosmovisor start --home "/home/sei_data"
-Restart=on-failure
-RestartSec=10
-LimitNOFILE=8192
-Environment="DAEMON_HOME=/home/sei_data"
-Environment="DAEMON_NAME=seid"
-Environment="UNSAFE_SKIP_BACKUP=true"
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable seid
-sudo systemctl start seid
 
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
         then
