@@ -20,7 +20,9 @@ else
     # Add error handling or exit the script if needed
 fi
 
- 
+sudo chown -R sxt-admin:sxt-admin /home/sxt-admin/go
+sudo chmod -R 0775 /home/sxt-admin/go
+
 sleep 5
 # Replace the following with your actual tag key and value
 tag_key_snapshot="Name"
@@ -149,8 +151,8 @@ else
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
             sudo chmod -R 0775 /home/sei_data/sei-chain
 
-            sudo cp -r /home/sxt-admin/sei-fullnode/demo-shell-script/sei-chain-dir /home/sei_data/sei-chain
-            cd /home/sei_data/sei-chain
+            sudo cp -r /home/sxt-admin/sei-fullnode/demo-shell-script/sei-chain-dir/ /home/sei_data/sei-chain
+            cd /home/sei_data/sei-chain/sei-chain-dir
             #git clone https://github.com/sei-protocol/sei-chain.git
             #sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
             #cd sei-chain
