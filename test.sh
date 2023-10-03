@@ -175,8 +175,37 @@ else
         fi
         sleep 10
         source ~/.profile
+        if [ $? -eq 0 ]; then
+            echo "source update sucess" + $(date) >> /tmp/sourceupdate.txt
+        else
+            echo "source update fail" + $(date) >> /tmp/sourceupdate.txt
+        fi
+
         source /home/sxt-admin/.profile
-        seid start --home "/home/sei_data"
+        if [ $? -eq 0 ]; then
+            echo "source update sucess" + $(date) >> /tmp/sourceupdate.txt
+        else
+            echo "source update fail" + $(date) >> /tmp/sourceupdate.txt
+        fi
+        sleep 10
+        seid init seidevcus01 --chain-id pacific-1 --home "/home/sei_data"
+        if [ $? -eq 0 ]; then
+            echo "seid  version sucess" + $(date) >> /tmp/seidversion.txt
+        else
+            echo "seid  version fail" + $(date) >> /tmp/seidversion.txt
+        fi
+        
+        wget -O /home/sei_data/config/genesis.json https://snapshots.polkachu.com/genesis/sei/genesis.json --inet4-only
+        sed -i 's/seeds = ""/seeds = "ade4d8bc8cbe014af6ebdf3cb7b1e9ad36f412c0@seeds.polkachu.com:11956"/' /home/sei_data/config/config.toml
+        sed -i -e "s|^bootstrap-peers *=.*|bootstrap-peers = \"33b1526dd09adfe1330ac29d51c89505e6363e8b@3.70.17.165:26656,6e1b407d182f58b0e6e2e519d1fc4d823f006273@35.158.58.99:26656\"|" /home/sei_data/config/config.toml
+
+        # Create Cosmovisor Folders
+        mkdir -p /home/sei_data/cosmovisor/genesis/bin
+        mkdir -p /home/sei_data/cosmovisor/upgrades
+
+        # Load Node Binary into Cosmovisor Folder
+        cp $HOME/go/bin/seid /home/sei_data/cosmovisor/genesis/bin
+        #seid start --home "/home/sei_data"
 
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
         then
