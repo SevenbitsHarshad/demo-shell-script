@@ -15,13 +15,14 @@ az login --identity
 # Check the exit code of the az login command
 if [ $? -eq 0 ]; then
     echo "Azure login with managed identity was successful."
+    echo "Azure login with managed identity was successful" + $(date) >> /tmp/azlogin.txt
 else
     echo "Azure login with managed identity failed."
+    echo "Azure login with managed identity failed." + $(date) >> /tmp/azlogin.txt
     # Add error handling or exit the script if needed
 fi
 
-sudo chown -R sxt-admin:sxt-admin /home/sxt-admin/go
-sudo chmod -R 0775 /home/sxt-admin/go
+
 
 sleep 5
 # Replace the following with your actual tag key and value
@@ -139,13 +140,18 @@ else
 
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
         then
+            
             # Install cosmovisor
-            go install github.com/cosmos/cosmos-sdk/cosmovisor/cmd/cosmovisor@v1.0.0    
+            go install github.com/cosmos/cosmos-sdk/cosmovisor/cmd/cosmovisor@v1.0.0
+            
             if [ $? -eq 0 ]; then
                 echo "cosmos install sucess" + $(date) >> /tmp/cosmosinstall.txt
             else
                 echo "cosmos install fail" + $(date) >> /tmp/cosmosinstall.txt
             fi
+
+            sudo chown -R sxt-admin:sxt-admin /home/sxt-admin/go
+            sudo chmod -R 0775 /home/sxt-admin/go
 
             mkdir -p /home/sei_data/sei-chain
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
@@ -221,7 +227,7 @@ else
         [Install]
         WantedBy=multi-user.target
         EOF
-        
+
         sudo systemctl daemon-reload
         sudo systemctl enable seid
         sudo systemctl start seid
