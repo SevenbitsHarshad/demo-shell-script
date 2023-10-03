@@ -113,7 +113,7 @@ else
         sudo mkfs.ext4 $device_name_volume_instance
     fi
 
-    #sudo mkdir $data_dir_name 
+    sudo mkdir $data_dir_name 
     sudo mount $device_name_volume_instance $data_dir_name
 
     uuid=$(sudo blkid -o value -s UUID $device_name_volume_instance)
@@ -145,7 +145,12 @@ else
                 echo "cosmos install fail" + $(date) >> /tmp/cosmosinstall.txt
             fi
 
-            cd /home/sei_data/demo-shell-script/sei-chain
+            mkdir -p /home/sei_data/sei-chain
+            sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
+            sudo chmod -R 0775 /home/sei_data/sei-chain
+
+            sudo cp -r /home/sxt-admin/sei-fullnode/demo-shell-script/sei-chain-dir /home/sei_data/sei-chain
+            cd /home/sei_data/sei-chain
             #git clone https://github.com/sei-protocol/sei-chain.git
             #sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
             #cd sei-chain
