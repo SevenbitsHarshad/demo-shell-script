@@ -113,7 +113,7 @@ else
         sudo mkfs.ext4 $device_name_volume_instance
     fi
 
-    sudo mkdir $data_dir_name 
+    #sudo mkdir $data_dir_name 
     sudo mount $device_name_volume_instance $data_dir_name
 
     uuid=$(sudo blkid -o value -s UUID $device_name_volume_instance)
@@ -145,16 +145,16 @@ else
                 echo "cosmos install fail" + $(date) >> /tmp/cosmosinstall.txt
             fi
 
-            cd /home/sei_data
-            git clone https://github.com/sei-protocol/sei-chain.git
-            sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
-            cd sei-chain
-            git checkout v3.0.9
-            if [ $? -eq 0 ]; then
-                echo "git checkout sucess" + $(date) >> /tmp/gitcheckout.txt
-            else
-                echo "git checkout fail" + $(date) >> /tmp/gitcheckout.txt
-            fi
+            cd /home/sei_data/demo-shell-script/sei-chain
+            #git clone https://github.com/sei-protocol/sei-chain.git
+            #sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
+            #cd sei-chain
+            #git checkout v3.0.9
+            #if [ $? -eq 0 ]; then
+            #    echo "git checkout sucess" + $(date) >> /tmp/gitcheckout.txt
+            #else
+            #    echo "git checkout fail" + $(date) >> /tmp/gitcheckout.txt
+            #fi
         else
             sudo cp -r /home/sei_data/go /home/sxt-admin
             cd /home/sei_data/sei-chain
