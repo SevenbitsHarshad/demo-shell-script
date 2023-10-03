@@ -158,6 +158,9 @@ else
             sudo chown -R sxt-admin:sxt-admin /home/sxt-admin/go
             sudo chmod -R 0775 /home/sxt-admin/go
 
+            sudo chown -R sxt-admin:sxt-admin /home/sei_data
+            sudo chmod -R 0775 /home/sei_data
+
             mkdir -p /home/sei_data/sei-chain
             sudo chown -R sxt-admin:sxt-admin /home/sei_data/sei-chain
             sudo chmod -R 0775 /home/sei_data/sei-chain
@@ -216,6 +219,26 @@ else
 
         # Load Node Binary into Cosmovisor Folder
         cp $HOME/go/bin/seid /home/sei_data/cosmovisor/genesis/bin
+         
+        sudo tee /etc/systemd/system/seid.service > /dev/null << EOF
+[Unit]
+Description=Sei Node Service
+After=network-online.target
+[Service]
+User=sxt-admin
+ExecStart=/home/sxt-admin/go/bin/cosmovisor start --home "/home/sei_data"
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=8192
+Environment="DAEMON_HOME=/home/sei_data"
+Environment="DAEMON_NAME=seid"
+Environment="UNSAFE_SKIP_BACKUP=true"
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable seid
 
         if { [ -z "$latest_snapshot_id" ] || [ "$latest_snapshot_id" == "null" ] ; }
         then
