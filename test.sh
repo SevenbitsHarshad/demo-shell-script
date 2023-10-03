@@ -217,8 +217,8 @@ else
         mkdir -p /home/sei_data/cosmovisor/genesis/bin
         mkdir -p /home/sei_data/cosmovisor/upgrades
         
-        chown -R sxt-admin:sxt-admin /home/sei_data
-        chmod -R 0775 /home/sei_data
+        sudo chown -R sxt-admin:sxt-admin /home/sei_data
+        sudo chmod -R 0775 /home/sei_data
 
         sudo chown -R sxt-admin:sxt-admin /home/sei_data/cosmovisor
         sudo chmod -R 0775 /home/sei_data/cosmovisor
