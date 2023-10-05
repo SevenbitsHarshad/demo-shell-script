@@ -2,24 +2,27 @@ package oracle
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/armon/go-metrics"
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+
 	"github.com/sei-protocol/sei-chain/oracle/price-feeder/config"
 	"github.com/sei-protocol/sei-chain/oracle/price-feeder/oracle/client"
 	"github.com/sei-protocol/sei-chain/oracle/price-feeder/oracle/provider"
 	"github.com/sei-protocol/sei-chain/oracle/price-feeder/oracle/types"
 	pfsync "github.com/sei-protocol/sei-chain/oracle/price-feeder/pkg/sync"
 	oracletypes "github.com/sei-protocol/sei-chain/x/oracle/types"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 )
 
 // Oracle implements the core component responsible for fetching exchange rates
@@ -44,6 +47,27 @@ type Oracle struct {
 	paramCache      ParamCache
 	jailCache       JailCache
 	healthchecks    map[string]http.Client
+	mockSetPrices   func(ctx context.Context) error
+}
+
+// createMappingsFromPairs is a helper function to initialize maps from currencyPairs
+// this is used to by test cases to initialize the oracle client
+func createMappingsFromPairs(currencyPairs []config.CurrencyPair) (
+	map[string]string,
+	map[string][]types.CurrencyPair) {
+	chainDenomMapping := make(map[string]string)
+	providerPairs := make(map[string][]types.CurrencyPair)
+
+	for _, pair := range currencyPairs {
+		for _, p := range pair.Providers {
+			providerPairs[p] = append(providerPairs[p], types.CurrencyPair{
+				Base:  pair.Base,
+				Quote: pair.Quote,
+			})
+		}
+		chainDenomMapping[pair.Base] = pair.ChainDenom
+	}
+	return chainDenomMapping, providerPairs
 }
 
 func New(
@@ -55,18 +79,8 @@ func New(
 	endpoints map[string]config.ProviderEndpoint,
 	healthchecksConfig []config.Healthchecks,
 ) *Oracle {
-	providerPairs := make(map[string][]types.CurrencyPair)
-	chainDenomMapping := make(map[string]string)
 
-	for _, pair := range currencyPairs {
-		for _, provider := range pair.Providers {
-			providerPairs[provider] = append(providerPairs[provider], types.CurrencyPair{
-				Base:  pair.Base,
-				Quote: pair.Quote,
-			})
-		}
-		chainDenomMapping[pair.Base] = pair.ChainDenom
-	}
+	chainDenomMapping, providerPairs := createMappingsFromPairs(currencyPairs)
 
 	healthchecks := make(map[string]http.Client)
 	for _, healthcheck := range healthchecksConfig {
@@ -170,12 +184,41 @@ func (o *Oracle) GetPrices() sdk.DecCoins {
 	return prices
 }
 
+// sendProviderFailureMetric function is overridden by unit tests
+var sendProviderFailureMetric = telemetry.IncrCounterWithLabels
+
+// safeMapContains handles a nil check if the map is nil
+func safeMapContains[V any](m map[string]V, key string) bool {
+	if m == nil {
+		return false
+	}
+	_, ok := m[key]
+	return ok
+}
+
+// reportPriceErrMetrics sends metrics to telemetry for missing prices
+func reportPriceErrMetrics[V any](providerName string, priceType string, prices map[string]V, expected []types.CurrencyPair) {
+	for _, pair := range expected {
+		if !safeMapContains(prices, pair.String()) {
+			sendProviderFailureMetric([]string{"failure", "provider"}, 1, []metrics.Label{
+				{Name: "type", Value: priceType},
+				{Name: "reason", Value: "error"},
+				{Name: "provider", Value: providerName},
+				{Name: "base", Value: pair.Base},
+			})
+		}
+	}
+}
+
 // SetPrices retrieves all the prices and candles from our set of providers as
 // determined in the config. If candles are available, uses TVWAP in order
 // to determine prices. If candles are not available, uses the most recent prices
 // with VWAP. Warns the user of any missing prices, and filters out any faulty
 // providers which do not report prices or candles within 2𝜎 of the others.
 func (o *Oracle) SetPrices(ctx context.Context) error {
+	if o.mockSetPrices != nil {
+		return o.mockSetPrices(ctx)
+	}
 	g := new(errgroup.Group)
 	mtx := new(sync.Mutex)
 	providerPrices := make(provider.AggregatedProviderPrices)
@@ -188,12 +231,15 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 
 		priceProvider, err := o.getOrSetProvider(ctx, providerName)
 		if err != nil {
-			return err
+			o.logger.Debug().AnErr("err", err).Msgf("Failed to get or set provider %s", providerName)
+			continue // don't block everything on one provider having an issue
 		}
 
 		for _, pair := range currencyPairs {
 			if _, ok := requiredRates[pair.Base]; !ok {
-				requiredRates[pair.Base] = struct{}{}
+				if o.paramCache.params.Whitelist.Contains(o.chainDenomMapping[pair.Base]) {
+					requiredRates[pair.Base] = struct{}{}
+				}
 			}
 		}
 
@@ -201,31 +247,33 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			prices := make(map[string]provider.TickerPrice, 0)
 			candles := make(map[string][]provider.CandlePrice, 0)
 			ch := make(chan struct{})
-			errCh := make(chan error, 1)
 
 			go func() {
 				defer close(ch)
 				prices, err = priceProvider.GetTickerPrices(currencyPairs...)
 				if err != nil {
-					telemetry.IncrCounter(1, "failure", "provider", "type", "ticker")
-					errCh <- err
+					o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
 				}
+				reportPriceErrMetrics(providerName, "ticker", prices, currencyPairs)
 
 				candles, err = priceProvider.GetCandlePrices(currencyPairs...)
 				if err != nil {
-					telemetry.IncrCounter(1, "failure", "provider", "type", "candle")
-					errCh <- err
+					o.logger.Debug().Err(err).Msg("failed to get candle prices from provider")
 				}
+				reportPriceErrMetrics(providerName, "candle", prices, currencyPairs)
 			}()
 
 			select {
 			case <-ch:
 				break
-			case err := <-errCh:
-				return err
 			case <-time.After(o.providerTimeout):
-				telemetry.IncrCounter(1, "failure", "provider", "type", "timeout")
-				return fmt.Errorf("provider timed out: %s", providerName)
+				telemetry.IncrCounterWithLabels([]string{"failure", "provider"}, 1, []metrics.Label{
+					{Name: "reason", Value: "timeout"},
+					{Name: "provider", Value: providerName},
+				})
+				o.logger.Error().Msgf("provider timed out: %s", providerName)
+				// returning nil to avoid canceling other providers that might succeed
+				return nil
 			}
 
 			// flatten and collect prices based on the base currency per provider
@@ -236,7 +284,13 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				success := SetProviderTickerPricesAndCandles(providerName, providerPrices, providerCandles, prices, candles, pair)
 				if !success {
 					mtx.Unlock()
-					return fmt.Errorf("failed to find any exchange rates in provider responses")
+					telemetry.IncrCounterWithLabels([]string{"failure", "provider"}, 1, []metrics.Label{
+						{Name: "reason", Value: "set-prices"},
+						{Name: "provider", Value: providerName},
+					})
+					o.logger.Error().Msgf("failed to set prices for provider %s", providerName)
+					// returning nil to avoid canceling other providers that might succeed
+					return nil
 				}
 			}
 
@@ -246,7 +300,8 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	if err := g.Wait(); err != nil {
-		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
+		// this should not be possible because there are no errors returned from the tasks
+		o.logger.Error().Err(err).Msg("set-prices errgroup returned an error")
 	}
 
 	computedPrices, err := GetComputedPrices(
@@ -255,15 +310,12 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		providerPrices,
 		o.providerPairs,
 		o.deviations,
+		requiredRates,
 	)
 	if err != nil {
 		return err
 	}
 
-	// TODO: make this more lenient to allow assigning prices even when unable to retrieve all
-	if len(computedPrices) != len(requiredRates) {
-		return fmt.Errorf("unable to get prices for all exchange candles")
-	}
 	for base := range requiredRates {
 		if _, ok := computedPrices[base]; !ok {
 			return fmt.Errorf("reported prices were not equal to required rates, missed: %s", base)
@@ -284,7 +336,34 @@ func GetComputedPrices(
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[string][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
+	requiredRates map[string]struct{},
 ) (prices map[string]sdk.Dec, err error) {
+	// only do asset provider map logic is log level is debug
+	if logger.GetLevel() == zerolog.DebugLevel {
+		assetProviderMap := make(map[string][]string)
+		for provider, val := range providerPrices {
+			for asset := range val {
+				assetProviderMap[asset] = append(assetProviderMap[asset], provider)
+			}
+		}
+		assetProviderJSON, err := json.Marshal(assetProviderMap)
+		if err != nil {
+			return nil, err
+		}
+		logger.Debug().Msg(fmt.Sprintf("Asset Provider Coverage Map: %s", string(assetProviderJSON)))
+
+		candleProviderMap := make(map[string][]string)
+		for provider, val := range providerCandles {
+			for asset := range val {
+				candleProviderMap[asset] = append(candleProviderMap[asset], provider)
+			}
+		}
+		candleProviderJSON, err := json.Marshal(candleProviderMap)
+		if err != nil {
+			return nil, err
+		}
+		logger.Debug().Msg(fmt.Sprintf("Candle Provider Coverage Map: %s", string(candleProviderJSON)))
+	}
 	// convert any non-USD denominated candles into USD
 	convertedCandles, err := convertCandlesToUSD(
 		logger,
@@ -307,14 +386,26 @@ func GetComputedPrices(
 	}
 
 	// attempt to use candles for TVWAP calculations
-	tvwapPrices, err := ComputeTVWAP(filteredCandles)
+	computedPrices, err := ComputeTVWAP(filteredCandles)
 	if err != nil {
 		return nil, err
 	}
 
-	// If TVWAP candles are not available or were filtered out due to staleness,
+	candleAssets := []string{}
+	tickerAssets := []string{}
+	for base := range computedPrices {
+		candleAssets = append(candleAssets, base)
+	}
+	allRequiredAssetsPresent := true
+	for asset := range requiredRates {
+		if _, ok := computedPrices[asset]; !ok {
+			allRequiredAssetsPresent = false
+		}
+	}
+	// If we're missing some assets, calculate tickers too to fill the gaps
 	// use most recent prices & VWAP instead.
-	if len(tvwapPrices) == 0 {
+	if !allRequiredAssetsPresent {
+		logger.Debug().Msg("Evaluating tickers because some required rates were not provided via candles")
 		convertedTickers, err := convertTickersToUSD(
 			logger,
 			providerPrices,
@@ -339,10 +430,15 @@ func GetComputedPrices(
 			return nil, err
 		}
 
-		return vwapPrices, nil
+		for asset, price := range vwapPrices {
+			if _, ok := computedPrices[asset]; !ok {
+				tickerAssets = append(tickerAssets, asset)
+				computedPrices[asset] = price
+			}
+		}
 	}
-
-	return tvwapPrices, nil
+	logger.Debug().Msg(fmt.Sprint("Assets using Candle TVWAP: ", candleAssets, " Assets using Ticker VWAP: ", tickerAssets))
+	return computedPrices, nil
 }
 
 // SetProviderTickerPricesAndCandles flattens and collects prices for
@@ -497,6 +593,20 @@ func (o *Oracle) checkWhitelist(params oracletypes.Params) {
 	}
 }
 
+// filterPricesByDenomList takes a list of DecCoins and filters out any
+// coins that are not in the provided DenomList.
+func filterPricesByDenomList(coinPrices sdk.DecCoins, denomList oracletypes.DenomList) sdk.DecCoins {
+	result := sdk.NewDecCoins()
+	for _, c := range coinPrices {
+		for _, d := range denomList {
+			if d.Name == c.Denom {
+				result = result.Add(c)
+			}
+		}
+	}
+	return result
+}
+
 func (o *Oracle) tick(
 	ctx context.Context,
 	clientCtx sdkclient.Context,
@@ -548,7 +658,11 @@ func (o *Oracle) tick(
 		return err
 	}
 
-	exchangeRatesStr := GenerateExchangeRatesString(o.GetPrices())
+	prices := o.GetPrices()
+
+	// filter for whitelisted denominations so that extra oracle prices are not penalized
+	filteredPrices := filterPricesByDenomList(prices, oracleParams.Whitelist)
+	exchangeRatesStr := GenerateExchangeRatesString(filteredPrices)
 
 	// otherwise, we're in the next voting period and thus we vote
 	voteMsg := &oracletypes.MsgAggregateExchangeRateVote{
@@ -556,6 +670,10 @@ func (o *Oracle) tick(
 		Feeder:        o.oracleClient.OracleAddrString,
 		Validator:     valAddr.String(),
 	}
+
+	o.logger.Debug().
+		Str("exchange_rates", GenerateExchangeRatesString(prices)).
+		Msg("pre-filtered prices")
 
 	o.logger.Info().
 		Str("exchange_rates", voteMsg.ExchangeRates).
