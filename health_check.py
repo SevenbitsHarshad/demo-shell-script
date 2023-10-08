@@ -80,7 +80,7 @@ def get_sei_node_health():
                         "last_block_number": last_block_number,
                         "third_party_last_block_number": third_party_last_block_number
                     }),
-                500,
+                200,
             )
     except Exception as e:
        print("Error:", e)
