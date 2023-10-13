@@ -69,7 +69,7 @@ def get_sei_node_health():
                         "message": "Last block number mismatch between your sei node and the third-party API",
                     }
                 ),
-                500,
+                200,
             )
         return (
                 jsonify(
