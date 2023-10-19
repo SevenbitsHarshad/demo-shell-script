@@ -13,7 +13,6 @@ import (
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -38,7 +37,6 @@ type Oracle struct {
 	chainDenomMapping  map[string]string
 	previousVotePeriod float64
 	priceProviders     map[string]provider.Provider
-	failedProviders    map[string]error
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
 	endpoints          map[string]config.ProviderEndpoint
@@ -109,7 +107,6 @@ func New(
 		deviations:        deviations,
 		paramCache:        ParamCache{},
 		jailCache:         JailCache{},
-		failedProviders:   make(map[string]error),
 		endpoints:         endpoints,
 		healthchecks:      healthchecks,
 	}
@@ -234,10 +231,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 
 		priceProvider, err := o.getOrSetProvider(ctx, providerName)
 		if err != nil {
-			sendProviderFailureMetric([]string{"failure", "provider"}, 1, []metrics.Label{
-				{Name: "reason", Value: "init"},
-				{Name: "provider", Value: providerName},
-			})
 			o.logger.Debug().AnErr("err", err).Msgf("Failed to get or set provider %s", providerName)
 			continue // don't block everything on one provider having an issue
 		}
@@ -267,7 +260,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				if err != nil {
 					o.logger.Debug().Err(err).Msg("failed to get candle prices from provider")
 				}
-				reportPriceErrMetrics(providerName, "candle", candles, currencyPairs)
+				reportPriceErrMetrics(providerName, "candle", prices, currencyPairs)
 			}()
 
 			select {
@@ -528,11 +521,6 @@ func (o *Oracle) getOrSetProvider(ctx context.Context, providerName string) (pro
 		ok            bool
 	)
 
-	//TODO: replace with a exponential backoff mechanism
-	if err, ok := o.failedProviders[providerName]; ok {
-		return nil, errors.Wrap(err, "failed at first init (skipping provider)")
-	}
-
 	priceProvider, ok = o.priceProviders[providerName]
 	if !ok {
 		newProvider, err := NewProvider(
@@ -543,7 +531,6 @@ func (o *Oracle) getOrSetProvider(ctx context.Context, providerName string) (pro
 			o.providerPairs[providerName]...,
 		)
 		if err != nil {
-			o.failedProviders[providerName] = err
 			return nil, err
 		}
 		priceProvider = newProvider
@@ -625,8 +612,6 @@ func (o *Oracle) tick(
 	clientCtx sdkclient.Context,
 	blockHeight int64) error {
 
-	startTime := time.Now().UTC()
-
 	o.logger.Debug().Msg(fmt.Sprintf("executing oracle tick for height %d", blockHeight))
 
 	if blockHeight < 1 {
@@ -664,7 +649,6 @@ func (o *Oracle) tick(
 			Int64("vote_period", oracleVotePeriod).
 			Float64("previous", o.previousVotePeriod).
 			Float64("current", currentVotePeriod).
-			Int64("tick_duration", time.Since(startTime).Milliseconds()).
 			Msg("skipping until next voting period")
 		return nil
 	}
@@ -696,45 +680,23 @@ func (o *Oracle) tick(
 		Str("validator", voteMsg.Validator).
 		Str("feeder", voteMsg.Feeder).
 		Float64("vote_period", currentVotePeriod).
-		Int64("tick_duration", time.Since(startTime).Milliseconds()).
 		Msg("Going to broadcast vote")
 
 	resp, err := o.oracleClient.BroadcastTx(clientCtx, voteMsg)
 	if err != nil {
-		o.logResponseError(err, resp, startTime, blockHeight)
 		telemetry.IncrCounter(1, "failure", "broadcast")
 		return err
 	}
-
 	o.logger.Info().
-		Str("status", "success").
 		Uint32("response_code", resp.Code).
 		Str("tx_hash", resp.TxHash).
-		Int64("tick_duration", time.Since(startTime).Milliseconds()).
-		Msg(fmt.Sprintf("broadcasted for height %d", blockHeight))
+		Msg(fmt.Sprintf("Successfully broadcasted for height %d", blockHeight))
 	telemetry.IncrCounter(1, "success", "broadcast")
 
 	o.previousVotePeriod = currentVotePeriod
 	o.healthchecksPing()
 
 	return nil
-}
-
-func (o *Oracle) logResponseError(err error, resp *sdk.TxResponse, startTime time.Time, blockHeight int64) {
-	responseCode := -1 // success is 0
-	var txHash string
-
-	if resp != nil {
-		responseCode = int(resp.Code)
-		txHash = resp.TxHash
-	}
-
-	o.logger.Error().Err(err).
-		Str("status", "failure").
-		Int("response_code", responseCode).
-		Str("tx_hash", txHash).
-		Int64("tick_duration", time.Since(startTime).Milliseconds()).
-		Msg(fmt.Sprintf("broadcasted for height %d", blockHeight))
 }
 
 func (o *Oracle) healthchecksPing() {

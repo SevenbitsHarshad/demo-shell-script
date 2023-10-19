@@ -37,7 +37,10 @@ func CallPreExecutionHooks(
 	if err := abciWrapper.HandleEBCancelOrders(spanCtx, sdkCtx, tracer, contractAddr, registeredPairs); err != nil {
 		return err
 	}
-	return abciWrapper.HandleEBPlaceOrders(spanCtx, sdkCtx, tracer, contractAddr, registeredPairs)
+	if err := abciWrapper.HandleEBPlaceOrders(spanCtx, sdkCtx, tracer, contractAddr, registeredPairs); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ExecutePair(

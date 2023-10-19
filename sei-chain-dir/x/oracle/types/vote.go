@@ -92,13 +92,12 @@ func (rates DenomOracleExchangeRatePairs) String() string {
 	return string(out)
 }
 
-func NewDenomOracleExchangeRatePair(denom string, exchangeRate sdk.Dec, lastUpdate sdk.Int, lastUpdateTimestamp int64) DenomOracleExchangeRatePair {
+func NewDenomOracleExchangeRatePair(denom string, exchangeRate sdk.Dec, lastUpdate sdk.Int) DenomOracleExchangeRatePair {
 	return DenomOracleExchangeRatePair{
 		Denom: denom,
 		OracleExchangeRate: OracleExchangeRate{
-			ExchangeRate:        exchangeRate,
-			LastUpdate:          lastUpdate,
-			LastUpdateTimestamp: lastUpdateTimestamp,
+			ExchangeRate: exchangeRate,
+			LastUpdate:   lastUpdate,
 		},
 	}
 }

@@ -68,23 +68,22 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 //-----------------------------------
 // ExchangeRate logic
 
-func (k Keeper) GetBaseExchangeRate(ctx sdk.Context, denom string) (sdk.Dec, sdk.Int, int64, error) {
+func (k Keeper) GetBaseExchangeRate(ctx sdk.Context, denom string) (sdk.Dec, sdk.Int, error) {
 	store := ctx.KVStore(k.storeKey)
 	b := store.Get(types.GetExchangeRateKey(denom))
 	if b == nil {
-		return sdk.ZeroDec(), sdk.ZeroInt(), 0, sdkerrors.Wrap(types.ErrUnknownDenom, denom)
+		return sdk.ZeroDec(), sdk.ZeroInt(), sdkerrors.Wrap(types.ErrUnknownDenom, denom)
 	}
 
 	exchangeRate := types.OracleExchangeRate{}
 	k.cdc.MustUnmarshal(b, &exchangeRate)
-	return exchangeRate.ExchangeRate, exchangeRate.LastUpdate, exchangeRate.LastUpdateTimestamp, nil
+	return exchangeRate.ExchangeRate, exchangeRate.LastUpdate, nil
 }
 
 func (k Keeper) SetBaseExchangeRate(ctx sdk.Context, denom string, exchangeRate sdk.Dec) {
 	store := ctx.KVStore(k.storeKey)
 	currHeight := sdk.NewInt(ctx.BlockHeight())
-	blockTimestamp := ctx.BlockTime().UnixMilli()
-	rate := types.OracleExchangeRate{ExchangeRate: exchangeRate, LastUpdate: currHeight, LastUpdateTimestamp: blockTimestamp}
+	rate := types.OracleExchangeRate{ExchangeRate: exchangeRate, LastUpdate: currHeight}
 	bz := k.cdc.MustMarshal(&rate)
 	store.Set(types.GetExchangeRateKey(denom), bz)
 }
@@ -490,7 +489,7 @@ func (k Keeper) CalculateTwaps(ctx sdk.Context, lookbackSeconds uint64) (types.O
 			denomToTimeWeightedMap[denom] = denomTimeWeightedSum
 			denomDurationMap[denom] = timeTraversed
 		}
-		return stop
+		return
 	})
 
 	denomKeys := make([]string, 0, len(denomToTimeWeightedMap))

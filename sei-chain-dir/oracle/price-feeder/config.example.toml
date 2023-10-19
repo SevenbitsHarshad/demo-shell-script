@@ -68,7 +68,6 @@ providers = [
   "huobi",
   "kraken",
   "okx",
-  "gate",
 ]
 quote = "USDT"
 
@@ -86,27 +85,9 @@ quote = "USD"
 base = "OSMO"
 chain_denom = "uosmo"
 providers = [
+  "okx",
   "huobi",
-  "binance",
-  "gate",
-]
-quote = "USDT"
-
-[[currency_pairs]]
-base = "OSMO"
-chain_denom = "uosmo"
-providers = [
-  "coinbase"
-]
-quote = "USD"
-
-[[currency_pairs]]
-base = "SEI"
-chain_denom = "usei"
-providers = [
-  "binance",
-  "huobi",
-  "gate",
+  "gate"
 ]
 quote = "USDT"
 
@@ -114,8 +95,9 @@ quote = "USDT"
 base = "SEI"
 chain_denom = "usei"
 providers = [
-  "kraken",
+  "okx",
   "coinbase",
+  "kraken",
 ]
 quote = "USD"
 
@@ -123,13 +105,11 @@ quote = "USD"
 base = "ATOM"
 chain_denom = "uatom"
 providers = [
-  "huobi",
-  "crypto",
-  "binance",
-  "gate",
   "okx",
+  "coinbase",
+  "kraken",
 ]
-quote = "USDT"
+quote = "USD"
 
 [account]
 address = "<FEEDER_ADDR>"

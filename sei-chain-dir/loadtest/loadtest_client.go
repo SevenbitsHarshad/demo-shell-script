@@ -260,8 +260,8 @@ func (c *LoadTestClient) ValidateTxs() {
 		codeString := "ok"
 		if code != 0 {
 			codespace := result.Codespace
-			err := sdkerrors.ABCIError(codespace, code, fmt.Sprintf("Error code=%d ", code))
-			codeString = err.Error()
+			error := sdkerrors.ABCIError(codespace, code, fmt.Sprintf("Error code=%d ", code))
+			codeString = error.Error()
 		}
 		responseStringMap[codeString]++
 		responseCodeMap[int(code)]++

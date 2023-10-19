@@ -14,7 +14,6 @@ services:
       - NUM_ACCOUNTS
       - SKIP_BUILD
       - INVARIANT_CHECK_INTERVAL
-      - UPGRADE_VERSION_LIST
     volumes:
       - "${PROJECT_HOME}:/sei-protocol/sei-chain:Z"
       - "${PROJECT_HOME}/../sei-tendermint:/sei-protocol/sei-tendermint:Z"
@@ -37,7 +36,6 @@ services:
       - NUM_ACCOUNTS
       - SKIP_BUILD
       - INVARIANT_CHECK_INTERVAL
-      - UPGRADE_VERSION_LIST
     volumes:
       - "${PROJECT_HOME}:/sei-protocol/sei-chain:Z"
       - "${PROJECT_HOME}/../sei-tendermint:/sei-protocol/sei-tendermint:Z"
@@ -57,7 +55,6 @@ services:
       - NUM_ACCOUNTS
       - SKIP_BUILD
       - INVARIANT_CHECK_INTERVAL
-      - UPGRADE_VERSION_LIST
     ports:
       - "26662-26664:26656-26658"
       - "9094-9095:9090-9091"
@@ -80,7 +77,6 @@ services:
       - NUM_ACCOUNTS
       - SKIP_BUILD
       - INVARIANT_CHECK_INTERVAL
-      - UPGRADE_VERSION_LIST
     ports:
       - "26665-26667:26656-26658"
       - "9096-9097:9090-9091"

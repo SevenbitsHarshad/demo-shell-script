@@ -428,11 +428,11 @@ func (candle *KrakenCandle) UnmarshalJSON(buf []byte) error {
 	}
 	candle.TimeStamp = int64(timeFloat)
 
-	closeStr, ok := tmp[5].(string)
+	close, ok := tmp[5].(string)
 	if !ok {
 		return fmt.Errorf("close field must be a string")
 	}
-	candle.Close = closeStr
+	candle.Close = close
 
 	volume, ok := tmp[7].(string)
 	if !ok {

@@ -29,7 +29,7 @@ type (
 
 // NewKeeper returns a new instance of the x/tokenfactory keeper
 func NewKeeper(
-	_ codec.Codec,
+	cdc codec.Codec,
 	storeKey sdk.StoreKey,
 	paramSpace paramtypes.Subspace,
 	accountKeeper types.AccountKeeper,

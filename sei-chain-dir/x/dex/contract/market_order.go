@@ -64,5 +64,8 @@ func CancelUnfulfilledMarketOrders(
 	span.SetAttributes(attribute.String("contract", contractAddr))
 	defer span.End()
 	abciWrapper := dexkeeperabci.KeeperWrapper{Keeper: dexkeeper}
-	return abciWrapper.HandleEBCancelOrders(spanCtx, sdkCtx, tracer, contractAddr, registeredPairs)
+	if err := abciWrapper.HandleEBCancelOrders(spanCtx, sdkCtx, tracer, contractAddr, registeredPairs); err != nil {
+		return err
+	}
+	return nil
 }

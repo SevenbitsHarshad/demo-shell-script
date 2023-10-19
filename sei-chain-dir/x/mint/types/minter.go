@@ -55,7 +55,10 @@ func ValidateMinter(minter Minter) error {
 	if endDate.Before(startDate) {
 		return fmt.Errorf("end date must be after start date %s < %s", endDate, startDate)
 	}
-	return validateMintDenom(minter.Denom)
+	if err := validateMintDenom(minter.Denom); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *Minter) GetLastMintDateTime() time.Time {

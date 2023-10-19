@@ -283,7 +283,11 @@ func (p *GateProvider) subscribeTickers(cps ...types.CurrencyPair) error {
 	}
 
 	tickerMsg := newGateTickerSubscription(topics...)
-	return p.subscribeTickerPairs(tickerMsg)
+	if err := p.subscribeTickerPairs(tickerMsg); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // subscribeCandles subscribes to the candle channels for all pairs one-by-one.
@@ -463,11 +467,11 @@ func (candle *GateCandle) UnmarshalParams(params [][]interface{}) error {
 	}
 	candle.TimeStamp = time
 
-	closeStr, ok := tmp[1].(string)
+	close, ok := tmp[1].(string)
 	if !ok {
 		return fmt.Errorf("close field must be a string")
 	}
-	candle.Close = closeStr
+	candle.Close = close
 
 	volume, ok := tmp[5].(string)
 	if !ok {
@@ -614,7 +618,7 @@ func (p *GateProvider) ping() error {
 	return p.wsClient.WriteMessage(websocket.PingMessage, ping)
 }
 
-func (p *GateProvider) pongHandler(_ string) error {
+func (p *GateProvider) pongHandler(appData string) error {
 	p.resetReconnectTimer()
 	return nil
 }
