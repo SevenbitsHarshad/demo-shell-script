@@ -74,12 +74,17 @@ func (mt *mockTelemetry) Len() int {
 }
 
 func (mt *mockTelemetry) AssertProviderError(t *testing.T, provider, base, reason, priceType string) {
-	mt.AssertContains(t, []string{"failure", "provider"}, 1, []metrics.Label{
+	labels := []metrics.Label{
 		{Name: "provider", Value: provider},
-		{Name: "base", Value: base},
 		{Name: "reason", Value: reason},
-		{Name: "type", Value: priceType},
-	})
+	}
+	if base != "" {
+		labels = append(labels, metrics.Label{Name: "base", Value: base})
+	}
+	if priceType != "" {
+		labels = append(labels, metrics.Label{Name: "type", Value: priceType})
+	}
+	mt.AssertContains(t, []string{"failure", "provider"}, 1, labels)
 }
 
 func (mt *mockTelemetry) AssertContains(t *testing.T, keys []string, val float32, labels []metrics.Label) {
@@ -92,7 +97,8 @@ func (mt *mockTelemetry) AssertContains(t *testing.T, keys []string, val float32
 }
 
 type mockProvider struct {
-	prices map[string]provider.TickerPrice
+	prices    map[string]provider.TickerPrice
+	candleErr error
 }
 
 func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]provider.TickerPrice, error) {
@@ -100,6 +106,9 @@ func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]provi
 }
 
 func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]provider.CandlePrice, error) {
+	if m.candleErr != nil {
+		return nil, m.candleErr
+	}
 	candles := make(map[string][]provider.CandlePrice)
 	for pair, price := range m.prices {
 		candles[pair] = []provider.CandlePrice{
@@ -428,6 +437,7 @@ func (ots *OracleTestSuite) TestPrices() {
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
+			candleErr: fmt.Errorf("test error"),
 		},
 		config.ProviderHuobi: mockProvider{
 			prices: map[string]provider.TickerPrice{
@@ -456,9 +466,10 @@ func (ots *OracleTestSuite) TestPrices() {
 	}
 	telemetryMock = resetMockTelemetry()
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
-	ots.Require().Equal(2, telemetryMock.Len())
+	ots.Require().Equal(3, telemetryMock.Len())
 	telemetryMock.AssertProviderError(ots.T(), config.ProviderBinance, "UMEE", "error", "ticker")
 	telemetryMock.AssertProviderError(ots.T(), config.ProviderBinance, "UMEE", "error", "candle")
+	telemetryMock.AssertProviderError(ots.T(), config.ProviderKraken, "UMEE", "error", "candle")
 
 	prices = ots.oracle.GetPrices()
 	ots.Require().Len(prices, 4)
@@ -467,6 +478,10 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("uusdc"))
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("uusdt"))
 
+	// if a provider never initialized correctly, verify it doesn't prevent future updates
+	ots.oracle.failedProviders = map[string]error{
+		config.ProviderBinance: fmt.Errorf("test error"),
+	}
 	// a non-whitelisted entry fails (ubxt), but the rest succeed
 	ots.oracle.priceProviders = map[string]provider.Provider{
 		config.ProviderBinance: failingProvider{
@@ -505,9 +520,10 @@ func (ots *OracleTestSuite) TestPrices() {
 	}
 	telemetryMock = resetMockTelemetry()
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
-	ots.Require().Equal(4, telemetryMock.Len())
+	ots.Require().Equal(3, telemetryMock.Len())
 	telemetryMock.AssertProviderError(ots.T(), config.ProviderOkx, "XBT", "error", "ticker")
 	telemetryMock.AssertProviderError(ots.T(), config.ProviderOkx, "XBT", "error", "candle")
+	telemetryMock.AssertProviderError(ots.T(), config.ProviderBinance, "", "init", "")
 
 	prices = ots.oracle.GetPrices()
 	ots.Require().Len(prices, 3)
@@ -550,6 +566,7 @@ func TestTickScenarios(t *testing.T) {
 		blockHeight        int64
 		previousVotePeriod float64
 		votePeriod         uint64
+		mockBroadcastErr   error
 
 		// expectations
 		expectedVoteMsg *oracletypes.MsgAggregateExchangeRateVote
@@ -600,6 +617,31 @@ func TestTickScenarios(t *testing.T) {
 				Feeder:        feederAddr,
 				Validator:     validatorAddr,
 			},
+		},
+		{
+			name:               "Should not crash if broadcast returns nil response with error",
+			isJailed:           false,
+			blockHeight:        1,
+			previousVotePeriod: 0,
+			votePeriod:         1,
+			pairs: []config.CurrencyPair{
+				{Base: "USDT", ChainDenom: "uusdt", Quote: "USD"},
+				{Base: "BTC", ChainDenom: "ubtc", Quote: "USD"},
+				{Base: "ETH", ChainDenom: "ueth", Quote: "USD"},
+			},
+			prices: map[string]sdk.Dec{
+				"USDT": sdk.MustNewDecFromStr("1.1"),
+				"BTC":  sdk.MustNewDecFromStr("2.2"),
+				"ETH":  sdk.MustNewDecFromStr("3.3"),
+			},
+			whitelist: denomList("uusdt", "ubtc", "ueth"),
+			expectedVoteMsg: &oracletypes.MsgAggregateExchangeRateVote{
+				ExchangeRates: "2.200000000000000000ubtc,3.300000000000000000ueth,1.100000000000000000uusdt",
+				Feeder:        feederAddr,
+				Validator:     validatorAddr,
+			},
+			mockBroadcastErr: fmt.Errorf("test error"),
+			expectedErr:      fmt.Errorf("test error"),
 		},
 		{
 			name:               "Same voting period should avoid broadcasting without error",
@@ -666,6 +708,11 @@ func TestTickScenarios(t *testing.T) {
 						require.Equal(t, test.expectedVoteMsg.Validator, voteMsg.Validator, test.name)
 
 						broadcastCount++
+
+						if test.mockBroadcastErr != nil {
+							return nil, test.mockBroadcastErr
+						}
+
 						return &sdk.TxResponse{TxHash: "0xhash", Code: 200}, nil
 					},
 				},
